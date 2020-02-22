@@ -133,39 +133,46 @@ impl Colony {
             self.bugs.get(index).unwrap().borrow_mut().clear();
         }
     }
-}
-
-fn is_consistent(colony: Rc<RefCell<Colony>>, bug_id: usize, expected_mark: Mark) -> bool {
-    let borrowed_colony = colony.borrow();
-    let bug = borrowed_colony.bugs.get(bug_id).unwrap();
-    let bug_is_marked = bug.borrow_mut().has_mark();
     
-    if !bug_is_marked {
-        bug.borrow_mut().set_tag(expected_mark);
-
-        let related_bug_id_list: Vec<usize> = bug
-            .borrow()
-            .relations
-            .iter()
-            .map(|related_bug| related_bug.borrow().id)
-            .collect();
-
-        for related_bug_id in related_bug_id_list {
-            if !is_consistent(
-                Rc::clone(&colony),
-                related_bug_id,
-                opposed_mark(expected_mark),
-            ) {
+    fn is_suspicious(&mut self) -> bool {
+        let colony_size = self.size();
+        for index in 0..colony_size {
+            self.clear_tags();
+            if !self.is_consistent(index, Mark::M) {
                 return false;
             }
         }
         return true;
     }
-    let id = bug.borrow().id;
-    let tag = bug.borrow_mut().get_tag();
-    println!("Bug {} is {}, expected {}", id, tag, expected_mark);
-    return bug.borrow_mut().check(expected_mark);
+    
+    fn is_consistent(&mut self, bug_id: usize, expected_mark: Mark) -> bool {
+        let bug = self.bugs.get(bug_id).unwrap();
+        let bug_is_marked = bug.borrow_mut().has_mark();
+        
+        if !bug_is_marked {
+            bug.borrow_mut().set_tag(expected_mark);
+    
+            let related_bug_id_list: Vec<usize> = bug
+                .borrow()
+                .relations
+                .iter()
+                .map(|related_bug| related_bug.borrow().id)
+                .collect();
+    
+            for related_bug_id in related_bug_id_list {
+                if !self.is_consistent (
+                    related_bug_id,
+                    opposed_mark(expected_mark),
+                ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return bug.borrow_mut().check(expected_mark);
+    }
 }
+
 
 fn opposed_mark(tag: Mark) -> Mark {
     match tag {
@@ -297,25 +304,42 @@ fn test_colony_relations() {
 
 #[test]
 fn test_inspect_small_cases() {
-    let colony = RefCell::new(Colony::new(2));
-    colony.borrow_mut().add_relation(0, 1);
-    assert!(is_consistent(Rc::new(colony), 0, Mark::M));
+    let mut colony = Colony::new(2);
+    colony.add_relation(0, 1);
+    assert!(colony.is_suspicious());
     
-    let colony = RefCell::new(Colony::new(3));
-    colony.borrow_mut().add_relation(0, 1);
-    colony.borrow_mut().add_relation(1, 2);
-    colony.borrow_mut().add_relation(2, 0);
-    assert!(!is_consistent(Rc::new(colony), 0, Mark::M));
+    let mut colony = Colony::new(3);
+    colony.add_relation(0, 1);
+    colony.add_relation(1, 2);
+    colony.add_relation(2, 0);
+    assert!(!colony.is_suspicious());
     
-    let colony = RefCell::new(Colony::new(4));
-    colony.borrow_mut().add_relation(0, 1);
-    colony.borrow_mut().add_relation(1, 2);
-    colony.borrow_mut().add_relation(2, 3);
-    colony.borrow_mut().add_relation(3, 0);
-    assert!(is_consistent(Rc::new(colony), 0, Mark::M));
+    let mut colony = Colony::new(4);
+    colony.add_relation(0, 1);
+    colony.add_relation(1, 2);
+    colony.add_relation(2, 3);
+    colony.add_relation(3, 0);
+    assert!(colony.is_suspicious());
 }
 
 fn main() {
-    let total_tests: u32 = get_input().parse().expect("Failed to parse integer");
-    for index in 0..total_tests {}
+    let total_tests: usize = get_input().parse().expect("Failed to parse integer");
+    for index in 0..total_tests {
+        
+        let (colony_size, interations_length) = read_tuple();
+        
+        let mut colony = Colony::new(colony_size);
+        
+        for _ in 0..interations_length {
+            let (bug_a, bug_b) = read_tuple();
+            colony.add_relation(bug_a - 1, bug_b - 1);
+        }
+        
+        println!("Scenario #{}", index + 1);
+        if colony.is_suspicious() {
+            println!("Suspicious bugs found!");
+        } else {
+            println!("No suspicious bugs found!");
+        }
+    }
 }
